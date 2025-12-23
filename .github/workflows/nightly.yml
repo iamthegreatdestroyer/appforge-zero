@@ -1,0 +1,33 @@
+name: Nightly Trend Scan
+
+on:
+    schedule:
+        - cron: "0 6 * * *" # 6 AM UTC daily
+    workflow_dispatch:
+
+jobs:
+    scan-trends:
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+
+            - uses: actions/setup-python@v5
+              with:
+                  python-version: "3.11"
+                  cache: "pip"
+
+            - name: Install Python dependencies
+              run: pip install -r requirements.txt
+
+            - name: Run trend scanner
+              run: python generators/trend_scanner.py --output trends.json
+              env:
+                  REDDIT_CLIENT_ID: ${{ secrets.REDDIT_CLIENT_ID }}
+                  REDDIT_CLIENT_SECRET: ${{ secrets.REDDIT_CLIENT_SECRET }}
+
+            - name: Upload trend data
+              uses: actions/upload-artifact@v4
+              with:
+                  name: trends-${{ github.run_number }}
+                  path: trends.json
+                  retention-days: 30

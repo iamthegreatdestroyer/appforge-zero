@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">{{APP_NAME}}</string>
+    <string name="app_description">{{APP_DESCRIPTION}}</string>
+    <string name="set_wallpaper">Set as Wallpaper</string>
+    <string name="wallpaper_set_success">Wallpaper set successfully!</string>
+    <string name="wallpaper_set_error">Failed to set wallpaper</string>
+</resources>

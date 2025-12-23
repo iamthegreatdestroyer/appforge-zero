@@ -1,0 +1,62 @@
+# Wallpaper Pack Template
+# A simple static wallpaper collection app for Android
+
+id: wallpaper-pack
+name: Wallpaper Pack
+description: A customizable wallpaper collection app with grid gallery and set wallpaper functionality
+category: personalization
+version: 1.0.0
+author: AppForge Zero
+preview_image: preview.png
+tags:
+  - wallpaper
+  - personalization
+  - gallery
+min_sdk_version: 21
+target_sdk_version: 34
+
+# Morph points define where customization happens
+morph_points:
+  - id: app_name
+    type: string
+    path: app/src/main/res/values/strings.xml
+    pattern: "{{APP_NAME}}"
+    required: true
+    
+  - id: app_description
+    type: string
+    path: app/src/main/res/values/strings.xml
+    pattern: "{{APP_DESCRIPTION}}"
+    required: false
+    default: "Beautiful wallpaper collection"
+    
+  - id: primary_color
+    type: color
+    path: app/src/main/res/values/colors.xml
+    pattern: "{{PRIMARY_COLOR}}"
+    required: false
+    default: "#6200EE"
+    
+  - id: secondary_color
+    type: color
+    path: app/src/main/res/values/colors.xml
+    pattern: "{{SECONDARY_COLOR}}"
+    required: false
+    default: "#03DAC5"
+    
+  - id: background_color
+    type: color
+    path: app/src/main/res/values/colors.xml
+    pattern: "{{BACKGROUND_COLOR}}"
+    required: false
+    default: "#121212"
+
+# Validation rules
+validations:
+  - type: string_length
+    target: app_name
+    max_length: 30
+    
+  - type: color_format
+    target: primary_color
+    format: hex
