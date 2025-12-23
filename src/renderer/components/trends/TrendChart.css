@@ -1,0 +1,132 @@
+/* Trend Chart Styles */
+.trend-chart {
+  padding: 2rem;
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.75rem;
+  margin-bottom: 2rem;
+}
+
+.trend-chart__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.trend-chart__header h3 {
+  margin: 0;
+  font-size: 1.25rem;
+  color: #1f2937;
+}
+
+.trend-chart__legend {
+  display: flex;
+  gap: 1.5rem;
+}
+
+.trend-chart__legend-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  color: #6b7280;
+}
+
+.trend-chart__legend-color {
+  width: 12px;
+  height: 12px;
+  border-radius: 0.25rem;
+}
+
+.trend-chart__container {
+  width: 100%;
+  margin-bottom: 1.5rem;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.5rem;
+  overflow: hidden;
+  background: #fafbfc;
+}
+
+.trend-chart__svg {
+  width: 100%;
+  height: auto;
+  min-height: 300px;
+}
+
+.trend-chart__top-trends {
+  padding-top: 1.5rem;
+  border-top: 1px solid #e5e7eb;
+}
+
+.trend-chart__top-trends h4 {
+  margin: 0 0 1rem 0;
+  font-size: 0.9375rem;
+  color: #1f2937;
+  font-weight: 600;
+}
+
+.trend-chart__trend-item {
+  display: grid;
+  grid-template-columns: 30px 1fr auto auto;
+  gap: 1rem;
+  align-items: center;
+  padding: 0.75rem;
+  margin-bottom: 0.5rem;
+  background: #f9fafb;
+  border-radius: 0.375rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.trend-chart__trend-item:hover,
+.trend-chart__trend-item--selected {
+  background: #eff6ff;
+  border-left: 3px solid #3b82f6;
+}
+
+.trend-chart__trend-icon {
+  text-align: center;
+  font-size: 1.25rem;
+}
+
+.trend-chart__trend-name {
+  font-size: 0.875rem;
+  color: #1f2937;
+  font-weight: 500;
+}
+
+.trend-chart__trend-source {
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 0.75rem;
+  font-weight: 600;
+  border-radius: 0.375rem;
+}
+
+.trend-chart__trend-volume {
+  font-size: 0.875rem;
+  color: #6b7280;
+  font-weight: 500;
+}
+
+@media (max-width: 768px) {
+  .trend-chart {
+    padding: 1rem;
+  }
+
+  .trend-chart__header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .trend-chart__legend {
+    flex-wrap: wrap;
+  }
+}
