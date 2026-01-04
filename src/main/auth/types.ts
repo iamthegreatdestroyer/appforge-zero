@@ -1,4 +1,4 @@
-I can add assignees, milestones, and estimates to these epics now/**
+/**
  * Phase 7: Authentication & Authorization Types
  *
  * Comprehensive type definitions for:
