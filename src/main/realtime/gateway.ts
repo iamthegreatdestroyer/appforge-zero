@@ -81,9 +81,12 @@ export class WebSocketGateway {
     }
 
     // Close all connections
-    for (const [connId, connection] of this.connections) {
-      await this.handleDisconnect(connId, connection);
-      connection.socket.close();
+    for (const connId of Array.from(this.connections.keys())) {
+      const connection = this.connections.get(connId);
+      if (connection) {
+        await this.handleDisconnect(connId, connection);
+        connection.socket.close();
+      }
     }
 
     // Close the server
