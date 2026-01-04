@@ -1,0 +1,74 @@
+# Phase 8 Epics — Real-Time & Analytics
+
+This file lists prioritized epics for Phase 8; each epic contains acceptance criteria and automation points. Use these entries to create GitHub Issues or let the Action create them automatically.
+
+## Epic 1 — WebSocket Gateway & Auth
+
+- **Goal:** Implement authenticated, scalable WebSocket gateway with presence tracking and reconnection.
+- **Acceptance Criteria:**
+  - Staging accepts authenticated WS connections verified via JWTManager.
+  - Presence table shows active connections; disconnects clean up presence state.
+  - Integration tests (unit+e2e) covering auth handshake and reconnections pass in CI.
+- **Automation:** e2e tests in CI; ephemeral environment per PR; smoke test on canary deploy.
+- **Estimated:** 5d
+- **Labels:** epic, realtime, auth
+
+## Epic 2 — Notification Service
+
+- **Goal:** Event-driven Notification microservice supporting in-app/email; per-user preferences and DLQ retry.
+- **Acceptance Criteria:**
+  - Reliable delivery in staging with DLQ recorded for failed deliveries.
+  - Delivery retries with exponential backoff configured.
+  - Metrics exported: deliveries, failures, DLQ count.
+- **Automation:** message-driven integration tests + delivery metrics automatic alerting.
+- **Estimated:** 5d
+
+## Epic 3 — Activity Stream & Storage
+
+- **Goal:** Append-only event ingestion and timeline APIs with retention and compaction.
+- **Acceptance Criteria:**
+  - Events ingested and queryable via timeline endpoints with acceptable latency (<200ms for recent window).
+  - Retention/compaction jobs automated and verified in staging.
+- **Automation:** scheduled jobs + tests and data validators.
+- **Estimated:** 4d
+
+## Epic 4 — Analytics Pipeline & Dashboards
+
+- **Goal:** Stream events to analytics store, create Grafana dashboards for auth metrics.
+- **Acceptance Criteria:**
+  - Dashboards show auth success rates, MFA adoption, WS latency, notification delivery rates.
+  - Nightly aggregations run and produce scheduled reports.
+- **Automation:** Kafka Connect to OLAP plus nightly rollups.
+- **Estimated:** 4d
+
+## Epic 5 — Admin APIs & Dashboard Backend
+
+- **Goal:** Admin endpoints for user and audit management with RBAC guard rails.
+- **Acceptance Criteria:**
+  - Admin endpoints protected with RBAC and tested.
+  - OpenAPI published and contract tests added to CI.
+- **Automation:** contract tests and doc publishing.
+- **Estimated:** 3d
+
+## Epic 6 — CI/CD & Canary Pipeline
+
+- **Goal:** Build pipelines to run tests, spin ephemeral envs, deploy canaries and auto-rollback.
+- **Acceptance Criteria:**
+  - Canary deployment automated with smoke tests and auto-rollback.
+  - Migrations check and dry-run executed pre-deploy.
+- **Automation:** GitHub Actions + smoke tests + migration dry-run.
+- **Estimated:** 5d
+
+## Epic 7 — Observability & Self-healing
+
+- **Goal:** Instrument services with OpenTelemetry, add alerts and automated remediation playbooks.
+- **Acceptance Criteria:**
+  - SLOs defined; alerts created for breach conditions.
+  - A validated auto-remediate playbook (e.g., restart unhealthy pods) exists in staging.
+- **Automation:** alert->runbook->automated-action flows.
+- **Estimated:** 4d
+
+## Usage
+
+- Use these epic definitions to create Issues (title = epic heading).
+- The repository contains a workflow that can create issues automatically from these markdown epics on merge to `main`.

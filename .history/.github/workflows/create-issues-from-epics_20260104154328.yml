@@ -1,0 +1,44 @@
+name: Create Epics Issues
+
+on:
+  push:
+    paths:
+      - 'docs/backlog/phase8-epics.md'
+      - '.github/ISSUE_TEMPLATE/epic-template.md'
+
+jobs:
+  create-issues:
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Create Epic Issues
+        uses: actions/github-script@v6
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('fs');
+            const path = 'docs/backlog/phase8-epics.md';
+            const md = fs.readFileSync(path, 'utf8');
+            const sections = md.split(/^## /m).slice(1);
+            for (const s of sections) {
+              const title = s.split('\n')[0].trim();
+              const body = 'From repo backlog:\n\n' + s.trim();
+              // Check if an open issue already exists
+              const search = await github.rest.search.issuesAndPullRequests({
+                q: `repo:${process.env.GITHUB_REPOSITORY} in:title ${title} state:open`
+              });
+              if (search.data.total_count === 0) {
+                await github.rest.issues.create({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  title: `Epic: ${title}`,
+                  body,
+                  labels: ['epic','phase/8']
+                });
+              } else {
+                console.log(`Issue for epic '${title}' already exists.`);
+              }
+            }
