@@ -10,10 +10,7 @@ module.exports = {
     node: true,
     es2021: true,
   },
-  extends: [
-    "eslint:recommended",
-    "plugin:@typescript-eslint/recommended",
-  ],
+  extends: ["eslint:recommended", "plugin:@typescript-eslint/recommended"],
   plugins: ["@typescript-eslint"],
   rules: {
     "no-console": ["warn", { allow: ["warn", "error"] }],
