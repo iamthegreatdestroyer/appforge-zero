@@ -4,7 +4,6 @@ module.exports = {
   parserOptions: {
     ecmaVersion: "latest",
     sourceType: "module",
-    project: "./tsconfig.json",
   },
   env: {
     node: true,
@@ -16,13 +15,14 @@ module.exports = {
     "no-console": ["warn", { allow: ["warn", "error"] }],
     "no-unused-vars": "off",
     "@typescript-eslint/no-unused-vars": ["warn", { argsIgnorePattern: "^_" }],
+    "@typescript-eslint/no-explicit-any": "warn",
+    "@typescript-eslint/no-var-requires": "warn",
   },
   overrides: [
     {
       files: ["**/*.test.ts", "**/*.test.tsx", "**/__tests__/**"],
       env: {
         node: true,
-        vitest: true,
       },
       globals: {
         describe: "readonly",
