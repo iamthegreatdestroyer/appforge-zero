@@ -208,11 +208,54 @@ export class TemplateEngine extends EventEmitter {
     return Array.from(this.templates.values());
   }
 
+  /** Alias used by IPC handlers */
+  getTemplates(): Template[] {
+    return this.listTemplates();
+  }
+
   /**
    * Get a specific template by ID
    */
   getTemplate(templateId: string): Template | undefined {
     return this.templates.get(templateId);
+  }
+
+  /** Re-scan disk and return updated list */
+  refreshTemplates(): Template[] {
+    // Synchronous re-load is not possible here (async loadTemplates exists),
+    // so return current in-memory list; callers that need async reload use loadTemplates().
+    return this.listTemplates();
+  }
+
+  /** Validate a template directory path */
+  validateTemplatePath(templatePath: string): { valid: boolean; template?: Template; errors?: string[] } {
+    const found = Array.from(this.templates.values()).find(t => t.basePath === templatePath);
+    if (found) {
+      return { valid: true, template: found };
+    }
+    return { valid: false, errors: [`No loaded template found at path: ${templatePath}`] };
+  }
+
+  /** Morph a template with given values into outputDir */
+  async morphTemplate(
+    templateId: string,
+    values: Record<string, string | number | boolean> | unknown[],
+    outputDir: string
+  ): Promise<{ success: boolean; outputPath: string }> {
+    const valuesMap: Record<string, string | number | boolean> = Array.isArray(values)
+      ? Object.fromEntries((values as Array<{ key: string; value: string | number | boolean }>).map(v => [v.key, v.value]))
+      : (values as Record<string, string | number | boolean>);
+
+    const config: MorphConfig = {
+      appName: String(valuesMap['appName'] ?? 'App'),
+      packageName: String(valuesMap['packageName'] ?? 'com.example.app'),
+      versionName: String(valuesMap['versionName'] ?? '1.0.0'),
+      versionCode: Number(valuesMap['versionCode'] ?? 1),
+      values: valuesMap,
+    };
+
+    await this.instantiate(templateId, config, outputDir);
+    return { success: true, outputPath: outputDir };
   }
 
   /**

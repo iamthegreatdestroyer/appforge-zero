@@ -43,11 +43,10 @@ const MorphPreview: React.FC<MorphPreviewProps> = ({
       settings: calculateCompletion(morphConfig.settings || {}),
       narrative: calculateCompletion(morphConfig.narrative || {}),
       overall: Math.round(
-        ((calculateCompletion(morphConfig.characters || {}) +
+        (calculateCompletion(morphConfig.characters || {}) +
           calculateCompletion(morphConfig.settings || {}) +
           calculateCompletion(morphConfig.narrative || {})) /
-          3) *
-          100
+          3
       ),
     };
   }, [morphConfig]);
@@ -107,9 +106,7 @@ const MorphPreview: React.FC<MorphPreviewProps> = ({
               className="morph-preview__progress-fill"
               style={{
                 width: `${completionMetrics.overall}%`,
-                backgroundColor: this.getProgressColor(
-                  completionMetrics.overall
-                ),
+                backgroundColor: getProgressColor(completionMetrics.overall),
               }}
             />
           </div>

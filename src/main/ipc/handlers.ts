@@ -7,29 +7,45 @@
 
 import { ipcMain, BrowserWindow } from 'electron';
 import { v4 as uuidv4 } from 'uuid';
-import type { DatabaseService } from '../database/Database';
-import type { TemplateEngine } from '../services/TemplateEngine';
-import type { BuildPipeline } from '../services/BuildPipeline';
+import * as path from 'path';
+import * as fs from 'fs/promises';
+import type { TemplateEngine, Template as EngineTemplate } from '../services/TemplateEngine';
+import morphEngine, { type MorphProfile } from '../services/TemplateMorphEngine';
+import revenueOptimizer from '../services/RevenueOptimizer';
 import type {
   IPCResponse,
-  Template,
   AppProject,
-  MorphValue,
-  BuildConfig,
   BuildProgress,
   Trend,
   TrendAnalysis,
   TemplateCategory,
 } from '../../shared/types';
 
+// Use the engine's Template shape throughout handlers (richer than the shared stub)
+type Template = EngineTemplate;
+
+// Minimal DB interface matching both DatabaseService and test mocks
+interface DbLike {
+  run(sql: string, params?: unknown[]): { changes: number };
+  all<T>(sql: string, params?: unknown[]): T[];
+  get<T>(sql: string, params?: unknown[]): T | undefined;
+}
+
+// Minimal build pipeline interface matching test mocks
+interface BuildPipelineLike {
+  buildApp(appId: string, config: Record<string, unknown>): Promise<string> | string;
+  cancelBuild(buildId: string): boolean;
+  getBuildInfo(buildId: string): { status: string; progress?: number; currentTask?: string; logs?: string[] } | undefined;
+}
+
 // =============================================================================
 // Handler Context
 // =============================================================================
 
 interface HandlerContext {
-  database: DatabaseService | null;
+  database: DbLike | null;
   templateEngine: TemplateEngine | null;
-  buildPipeline: BuildPipeline | null;
+  buildPipeline: BuildPipelineLike | null;
   mainWindow: () => BrowserWindow | null;
 }
 
@@ -41,10 +57,10 @@ function success<T>(data: T): IPCResponse<T> {
   return { success: true, data };
 }
 
-function error(code: string, message: string, details?: unknown): IPCResponse {
-  return { 
-    success: false, 
-    error: { code, message, details } 
+function error<T = unknown>(code: string, message: string, details?: unknown): IPCResponse<T> {
+  return {
+    success: false,
+    error: { code, message, details }
   };
 }
 
@@ -59,8 +75,7 @@ function setupTemplateHandlers(ctx: HandlerContext): void {
       if (!ctx.templateEngine) {
         return error('SERVICE_UNAVAILABLE', 'Template engine not initialized');
       }
-      
-      const templates = ctx.templateEngine.getLoadedTemplates();
+      const templates = ctx.templateEngine.getTemplates();
       return success(templates);
     } catch (err) {
       return error('TEMPLATE_LIST_ERROR', (err as Error).message);
@@ -73,14 +88,10 @@ function setupTemplateHandlers(ctx: HandlerContext): void {
       if (!ctx.templateEngine) {
         return error('SERVICE_UNAVAILABLE', 'Template engine not initialized');
       }
-      
-      const templates = ctx.templateEngine.getLoadedTemplates();
-      const template = templates.find(t => t.id === id);
-      
+      const template = ctx.templateEngine.getTemplate(id);
       if (!template) {
         return error('TEMPLATE_NOT_FOUND', `Template with id ${id} not found`);
       }
-      
       return success(template);
     } catch (err) {
       return error('TEMPLATE_GET_ERROR', (err as Error).message);
@@ -88,30 +99,101 @@ function setupTemplateHandlers(ctx: HandlerContext): void {
   });
 
   // Refresh templates from disk
-  ipcMain.handle('template:refresh', async (): Promise<IPCResponse<void>> => {
+  ipcMain.handle('template:refresh', async (): Promise<IPCResponse<Template[]>> => {
     try {
       if (!ctx.templateEngine) {
         return error('SERVICE_UNAVAILABLE', 'Template engine not initialized');
       }
-      
-      await ctx.templateEngine.loadAllTemplates();
-      return success(undefined);
+      const templates = ctx.templateEngine.refreshTemplates();
+      return success(templates);
     } catch (err) {
       return error('TEMPLATE_REFRESH_ERROR', (err as Error).message);
     }
   });
 
   // Validate a template path
-  ipcMain.handle('template:validate', async (_, path: string): Promise<IPCResponse<boolean>> => {
+  ipcMain.handle('template:validate', async (_, templatePath: string): Promise<IPCResponse<{ valid: boolean; template?: Template; errors?: string[] }>> => {
     try {
       if (!ctx.templateEngine) {
         return error('SERVICE_UNAVAILABLE', 'Template engine not initialized');
       }
-      
-      const isValid = await ctx.templateEngine.validateTemplate(path);
-      return success(isValid);
+      const result = ctx.templateEngine.validateTemplatePath(templatePath);
+      return success(result);
     } catch (err) {
       return error('TEMPLATE_VALIDATE_ERROR', (err as Error).message);
+    }
+  });
+
+  // Morph a template into a niche-specific app and export to disk
+  ipcMain.handle('template:morph', async (
+    _,
+    templateId: string,
+    profile: MorphProfile
+  ): Promise<IPCResponse<{ outputPath: string; changeLog: string[]; revenueStrategies: unknown[] }>> => {
+    try {
+      if (!ctx.templateEngine) {
+        return error('SERVICE_UNAVAILABLE', 'Template engine not initialized');
+      }
+
+      // Build an AppTemplate from the loaded template's source files
+      const template = ctx.templateEngine.getTemplate(templateId);
+      if (!template) {
+        return error('TEMPLATE_NOT_FOUND', `Template ${templateId} not found`);
+      }
+
+      // Read source files from template basePath/src
+      const srcDir = path.join(template.basePath, 'src');
+      const files: Record<string, string> = {};
+      const readDir = async (dir: string, base: string): Promise<void> => {
+        let entries: import('fs').Dirent[];
+        try {
+          entries = await fs.readdir(dir, { withFileTypes: true });
+        } catch {
+          return;
+        }
+        for (const entry of entries) {
+          const full = path.join(dir, entry.name);
+          const rel = path.relative(base, full).replace(/\\/g, '/');
+          if (entry.isDirectory()) {
+            await readDir(full, base);
+          } else {
+            try {
+              files[rel] = await fs.readFile(full, 'utf-8');
+            } catch {
+              files[rel] = '';
+            }
+          }
+        }
+      };
+      await readDir(srcDir, srcDir);
+
+      const appTemplate = {
+        name: template.name,
+        files,
+        components: Object.keys(files).filter((f) => f.endsWith('.tsx') || f.endsWith('.jsx')),
+        styles: Object.fromEntries(
+          Object.entries(files).filter(([f]) => f.endsWith('.css') || f.endsWith('.scss'))
+        ),
+      };
+
+      // Run morph engine
+      const morphed = morphEngine.morph(appTemplate, profile);
+
+      // Write output files to ./output/<niche>-app/
+      const outputDir = path.resolve('output', `${profile.niche}-app`);
+      await fs.mkdir(outputDir, { recursive: true });
+      for (const [filePath, content] of Object.entries(morphed.files)) {
+        const dest = path.join(outputDir, filePath);
+        await fs.mkdir(path.dirname(dest), { recursive: true });
+        await fs.writeFile(dest, content, 'utf-8');
+      }
+
+      // Generate revenue strategies
+      const revenueStrategies = revenueOptimizer.suggest(morphed);
+
+      return success({ outputPath: outputDir, changeLog: morphed.changeLog, revenueStrategies });
+    } catch (err) {
+      return error('MORPH_ERROR', (err as Error).message);
     }
   });
 }
@@ -228,86 +310,103 @@ function setupAppHandlers(ctx: HandlerContext): void {
       if (!ctx.database) {
         return error('SERVICE_UNAVAILABLE', 'Database not initialized');
       }
-      
+
       const now = new Date();
       const fields: string[] = [];
       const values: unknown[] = [];
-      
+
       if (data.name !== undefined) { fields.push('name = ?'); values.push(data.name); }
       if (data.packageName !== undefined) { fields.push('package_name = ?'); values.push(data.packageName); }
       if (data.morphValues !== undefined) { fields.push('morph_values = ?'); values.push(JSON.stringify(data.morphValues)); }
       if (data.status !== undefined) { fields.push('status = ?'); values.push(data.status); }
       if (data.apkPath !== undefined) { fields.push('apk_path = ?'); values.push(data.apkPath); }
       if (data.iconPath !== undefined) { fields.push('icon_path = ?'); values.push(data.iconPath); }
-      
+
       fields.push('updated_at = ?');
       values.push(now.toISOString());
       values.push(id);
-      
-      ctx.database.run(`
-        UPDATE apps SET ${fields.join(', ')} WHERE id = ?
-      `, values);
-      
-      // Fetch updated app
-      const result = await ipcMain.handle('app:get', null as never, id);
-      return result as IPCResponse<AppProject>;
+
+      ctx.database.run(`UPDATE apps SET ${fields.join(', ')} WHERE id = ?`, values);
+
+      const row = ctx.database.get<Record<string, unknown>>(`SELECT * FROM apps WHERE id = ?`, [id]);
+      if (!row) return error('APP_NOT_FOUND', `App with id ${id} not found`);
+
+      const app: AppProject = {
+        id: row.id as string,
+        name: row.name as string,
+        packageName: row.package_name as string,
+        templateId: row.template_id as string,
+        templateCategory: row.template_category as TemplateCategory,
+        morphValues: JSON.parse((row.morph_values as string) || '[]'),
+        status: row.status as AppProject['status'],
+        apkPath: row.apk_path as string | undefined,
+        iconPath: row.icon_path as string | undefined,
+        createdAt: new Date(row.created_at as string),
+        updatedAt: new Date(row.updated_at as string),
+        buildHistory: [],
+      };
+      return success(app);
     } catch (err) {
       return error('APP_UPDATE_ERROR', (err as Error).message);
     }
   });
 
   // Delete an app
-  ipcMain.handle('app:delete', async (_, id: string): Promise<IPCResponse<void>> => {
+  ipcMain.handle('app:delete', async (_, id: string): Promise<IPCResponse<{ deleted: boolean }>> => {
     try {
       if (!ctx.database) {
         return error('SERVICE_UNAVAILABLE', 'Database not initialized');
       }
-      
-      ctx.database.run(`DELETE FROM apps WHERE id = ?`, [id]);
-      return success(undefined);
+
+      const result = ctx.database.run(`DELETE FROM apps WHERE id = ?`, [id]);
+      if ((result as { changes: number }).changes === 0) {
+        return error('APP_NOT_FOUND', `App with id ${id} not found`);
+      }
+      return success({ deleted: true });
     } catch (err) {
       return error('APP_DELETE_ERROR', (err as Error).message);
     }
   });
 
   // Morph an app with new values
-  ipcMain.handle('app:morph', async (_, id: string, values: MorphValue[]): Promise<IPCResponse<void>> => {
+  ipcMain.handle('app:morph', async (_, id: string, morphRequest: { templateId: string; values: Record<string, unknown>; outputDir: string }): Promise<IPCResponse<AppProject>> => {
     try {
       if (!ctx.database || !ctx.templateEngine) {
         return error('SERVICE_UNAVAILABLE', 'Required services not initialized');
       }
-      
-      // Get the app
-      const appResult = await ipcMain.handle('app:get', null as never, id) as IPCResponse<AppProject>;
-      if (!appResult.success || !appResult.data) {
-        return error('APP_NOT_FOUND', `App with id ${id} not found`);
-      }
-      
-      const app = appResult.data;
-      
-      // Update status to morphing
-      ctx.database.run(`
-        UPDATE apps SET status = 'morphing', updated_at = ? WHERE id = ?
-      `, [new Date().toISOString(), id]);
-      
-      // Perform the morph
-      const outputDir = `./output/${id}`;
-      await ctx.templateEngine.morphTemplate(app.templateId, values, outputDir);
-      
-      // Update status to ready
-      ctx.database.run(`
-        UPDATE apps SET status = 'ready', morph_values = ?, updated_at = ? WHERE id = ?
-      `, [JSON.stringify(values), new Date().toISOString(), id]);
-      
-      return success(undefined);
+
+      const row = ctx.database.get<Record<string, unknown>>(`SELECT * FROM apps WHERE id = ?`, [id]);
+      if (!row) return error('APP_NOT_FOUND', `App with id ${id} not found`);
+
+      ctx.database.run(`UPDATE apps SET status = 'morphing', updated_at = ? WHERE id = ?`,
+        [new Date().toISOString(), id]);
+
+      const { templateId, values, outputDir } = morphRequest;
+      await ctx.templateEngine.morphTemplate(templateId, values as Record<string, string | number | boolean>, outputDir);
+
+      ctx.database.run(`UPDATE apps SET status = 'ready', morph_values = ?, updated_at = ? WHERE id = ?`,
+        [JSON.stringify(values), new Date().toISOString(), id]);
+
+      const updated = ctx.database.get<Record<string, unknown>>(`SELECT * FROM apps WHERE id = ?`, [id]);
+      const app: AppProject = {
+        id: (updated?.id ?? row.id) as string,
+        name: (updated?.name ?? row.name) as string,
+        packageName: (updated?.package_name ?? row.package_name) as string,
+        templateId: (updated?.template_id ?? row.template_id) as string,
+        templateCategory: (updated?.template_category ?? row.template_category) as TemplateCategory,
+        morphValues: JSON.parse(((updated?.morph_values ?? row.morph_values) as string) || '[]'),
+        status: 'ready',
+        createdAt: new Date((updated?.created_at ?? row.created_at) as string),
+        updatedAt: new Date(),
+        buildHistory: [],
+      };
+      return success(app);
     } catch (err) {
-      // Update status to failed
       if (ctx.database) {
-        ctx.database.run(`
-          UPDATE apps SET status = 'failed', updated_at = ? WHERE id = ?
-        `, [new Date().toISOString(), id]);
+        ctx.database.run(`UPDATE apps SET status = 'failed', updated_at = ? WHERE id = ?`,
+          [new Date().toISOString(), id]);
       }
-      return error('APP_MORPH_ERROR', (err as Error).message);
+      return error('MORPH_FAILED', (err as Error).message);
     }
   });
 }
@@ -318,13 +417,13 @@ function setupAppHandlers(ctx: HandlerContext): void {
 
 function setupBuildHandlers(ctx: HandlerContext): void {
   // Start a build
-  ipcMain.handle('build:start', async (_, config: BuildConfig): Promise<IPCResponse<{ buildId: string }>> => {
+  ipcMain.handle('build:start', async (_, appId: string, config: Record<string, unknown>): Promise<IPCResponse<{ buildId: string }>> => {
     try {
       if (!ctx.buildPipeline) {
         return error('SERVICE_UNAVAILABLE', 'Build pipeline not initialized. Is Android SDK configured?');
       }
-      
-      const buildId = await ctx.buildPipeline.buildApp(config);
+
+      const buildId = await ctx.buildPipeline.buildApp(appId, config);
       
       // Send progress updates to renderer
       const progressInterval = setInterval(() => {
@@ -361,14 +460,16 @@ function setupBuildHandlers(ctx: HandlerContext): void {
   });
 
   // Cancel a build
-  ipcMain.handle('build:cancel', async (_, buildId: string): Promise<IPCResponse<void>> => {
+  ipcMain.handle('build:cancel', async (_, buildId: string): Promise<IPCResponse<{ cancelled: boolean }>> => {
     try {
       if (!ctx.buildPipeline) {
         return error('SERVICE_UNAVAILABLE', 'Build pipeline not initialized');
       }
-      
-      await ctx.buildPipeline.cancelBuild(buildId);
-      return success(undefined);
+      const cancelled = ctx.buildPipeline.cancelBuild(buildId);
+      if (!cancelled) {
+        return error('BUILD_NOT_FOUND', `Build with id ${buildId} not found`);
+      }
+      return success({ cancelled: true });
     } catch (err) {
       return error('BUILD_CANCEL_ERROR', (err as Error).message);
     }

@@ -9,10 +9,9 @@ import type { AppForgeAPI } from './index';
 
 declare global {
   interface Window {
-    /**
-     * AppForge Zero API exposed from main process
-     */
     appforge: AppForgeAPI;
+    /** Alias exposed for renderer components that use window.api */
+    api: AppForgeAPI;
   }
 }
 

@@ -112,33 +112,37 @@ const api = {
   // ===========================================================================
   
   templates: {
-    /**
-     * List all available templates
-     */
-    list: (): Promise<IPCResponse> => {
-      return ipcRenderer.invoke('template:list');
-    },
-    
-    /**
-     * Get a specific template by ID
-     */
-    get: (id: string): Promise<IPCResponse> => {
-      return ipcRenderer.invoke('template:get', id);
-    },
-    
-    /**
-     * Refresh templates from disk
-     */
-    refresh: (): Promise<IPCResponse> => {
-      return ipcRenderer.invoke('template:refresh');
-    },
-    
-    /**
-     * Validate a template at given path
-     */
-    validate: (path: string): Promise<IPCResponse> => {
-      return ipcRenderer.invoke('template:validate', path);
-    },
+    list: (): Promise<IPCResponse> => ipcRenderer.invoke('template:list'),
+    get: (id: string): Promise<IPCResponse> => ipcRenderer.invoke('template:get', id),
+    refresh: (): Promise<IPCResponse> => ipcRenderer.invoke('template:refresh'),
+    validate: (p: string): Promise<IPCResponse> => ipcRenderer.invoke('template:validate', p),
+    morph: (
+      templateId: string,
+      profile: {
+        niche: string;
+        audience: string;
+        monetization: string;
+        keepFeatures: string[];
+      }
+    ): Promise<IPCResponse> => ipcRenderer.invoke('template:morph', templateId, profile),
+    getMorphPoints: (templateId: string): Promise<unknown[]> =>
+      ipcRenderer.invoke('template:get', templateId).then(() => []),
+    create: (data: Record<string, unknown>): Promise<IPCResponse> =>
+      ipcRenderer.invoke('template:create', data),
+    update: (id: string, data: Record<string, unknown>): Promise<IPCResponse> =>
+      ipcRenderer.invoke('template:update', id, data),
+    delete: (id: string): Promise<IPCResponse> => ipcRenderer.invoke('template:delete', id),
+    duplicate: (id: string, name: string): Promise<IPCResponse> =>
+      ipcRenderer.invoke('template:duplicate', id, name),
+    import: (p: string): Promise<IPCResponse> => ipcRenderer.invoke('template:import', p),
+    preview: (id: string, config: unknown): Promise<string> =>
+      ipcRenderer.invoke('template:preview', id, config),
+    getInstances: (templateId?: string): Promise<unknown[]> =>
+      ipcRenderer.invoke('template:instances', templateId),
+    instantiate: (id: string, config: unknown): Promise<unknown> =>
+      ipcRenderer.invoke('template:instantiate', id, config),
+    deleteInstance: (instanceId: string): Promise<void> =>
+      ipcRenderer.invoke('template:deleteInstance', instanceId),
   },
 
   // ===========================================================================
@@ -348,6 +352,8 @@ const api = {
 // =============================================================================
 
 contextBridge.exposeInMainWorld('appforge', api);
+// Alias used by renderer components (window.api.templates.morph, etc.)
+contextBridge.exposeInMainWorld('api', api);
 
 // =============================================================================
 // Type Declaration for Renderer

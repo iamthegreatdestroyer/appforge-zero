@@ -735,7 +735,7 @@ describe('Handler Registration', () => {
     
     setupIPCHandlers(ctx);
     
-    expect(ipcMain.handle).toHaveBeenCalledTimes(17); // Total number of handlers
+    expect(ipcMain.handle).toHaveBeenCalledTimes(18); // Total number of handlers (includes template:morph)
   });
 });
 
