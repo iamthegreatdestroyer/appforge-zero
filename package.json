@@ -60,6 +60,6 @@
   "engines": {
     "node": ">=20.0.0"
   },
-  "author": "AppForge Zero Team",
+  "author": "Stephen Bilodeau <sgbilod@gmail.com>",
   "license": "MIT"
 }
